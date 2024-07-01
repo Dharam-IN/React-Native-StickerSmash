@@ -3,13 +3,33 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import ImageViewer from './components/ImageViewer';
 import Button from './components/Button';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import IconButton from './components/IconButton';
+import CircleButton from './components/CircleButton';
+import EmojiPicker from './components/EmojiPicker';
+import EmojiList from './components/EmojiList';
+import EmojiSticker from './components/EmojiSticker';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import * as MediaLibrary from 'expo-media-library';
+import { captureRef } from 'react-native-view-shot';
+
+
 
 const PlaceholderImage = require('./assets/images/background-image.png')
 
 export default function App() {
+  const imageRef = useRef();
   
-  const [selectedImage, setSelectedImage] = useState(null)
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showAppOptions, setShowAppOptions] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [pickedEmoji, setPickedEmoji] = useState(null);
+  const [status, requestPermission] = MediaLibrary.usePermissions();
+
+  if (status === null) {
+    requestPermission();
+  }
+
 
   const pickImageAsync = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -19,24 +39,71 @@ export default function App() {
 
     if(!result.canceled){
       console.log(result);
-      setSelectedImage(result.assets[0].uri)
+      setSelectedImage(result.assets[0].uri);
+      setShowAppOptions(true);
     }else{
       alert("You did not select any image.")
     }
+  }
 
+  const onReset = () => {
+    setShowAppOptions(false);
+  };
+
+  const onAddSticker = () => {
+    setIsModalVisible(true)
+  }
+
+  const onSaveImageAsync = async() => {
+    try {
+      const localUri = await captureRef(imageRef, {
+        height: 440,
+        quality: 1,
+      });
+
+      await MediaLibrary.saveToLibraryAsync(localUri);
+      if (localUri) {
+        alert("Saved!");
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const onModalClose = () => {
+    setIsModalVisible(false)
   }
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
+      <View style={styles.container}>
       <View style={styles.imageContainer}>
-        {/* <Image source={PlaceholderImage} style={styles.image}/> */}
-        <ImageViewer PlaceholderImageSourse={PlaceholderImage} selectedImage={selectedImage}/>
+        <View ref={imageRef} collapsable={false}>
+          <ImageViewer PlaceholderImageSourse={PlaceholderImage} selectedImage={selectedImage}/>
+          {pickedEmoji && <EmojiSticker imageSize={40} stickerSource={pickedEmoji}/>}
+        </View>
       </View>
-      <View style={styles.footerContainer}>
-        <Button label={"Choose a photo"} theme="primary" onPress={pickImageAsync}/>
-        <Button label={"Use this photo"}/>
-      </View>
+      {
+        showAppOptions ? (
+          <View style={styles.optionsContainer}>
+            <View style={styles.optionsRow}>
+              <IconButton icon='refresh' label="Reset" onPress={onReset}/>
+              <CircleButton onPress={onAddSticker}/>
+              <IconButton icon='save-alt' label="Save" onPress={onSaveImageAsync}/>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.footerContainer}>
+            <Button label={"Choose a photo"} theme="primary" onPress={pickImageAsync}/>
+            <Button label={"Use this photo"} onPress={() => setShowAppOptions(true)}/>
+          </View>
+        )
+      }
+      <EmojiPicker isVisible={isModalVisible} onClose={onModalClose}>
+        <EmojiList onSelect={setPickedEmoji} onCloseModal={onModalClose}/>
+      </EmojiPicker>
     </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -59,5 +126,13 @@ const styles = StyleSheet.create({
   footerContainer: {
     flex: 1 / 3,
     alignItems: 'center',
-  }
+  },
+  optionsContainer: {
+    position: 'absolute',
+    bottom: 80,
+  },
+  optionsRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
 });
